@@ -171,7 +171,20 @@ export function thanMayGac(gocKho) {
   let tep;
   try { tep = readdirSync(thuMuc).filter((t) => /\.ya?ml$/i.test(t)); } catch { return null; }
   if (!tep.length) return null;
-  return tep.map((t) => readFileSync(join(thuMuc, t), 'utf8')).join('\n');
+  return tep.map((t) => boChuThich(readFileSync(join(thuMuc, t), 'utf8'))).join('\n');
+}
+
+/**
+ * Bỏ dòng CHÚ THÍCH của YAML trước khi soi.
+ *
+ * 🩸 Đã trả giá ngay lúc dựng (31/07): `hidental-site/ci.yml` có chú thích
+ *    `# \`npm test\` = gác thước-chết + 3 thước…`. Đục bỏ **bước chạy thật** `run: npm test`
+ *    mà luật ⑧ vẫn XANH — vì nó đọc trúng chữ trong comment. Tức là gỡ cổng khỏi máy gác cũng
+ *    không ai kêu: đúng thứ xanh-giả cái gác này sinh ra để chặn, lại xảy ra trong chính nó.
+ *    Chỉ bỏ chú thích NGUYÊN DÒNG (`^\s*#`) — cắt cả `#` giữa dòng sẽ chém nhầm chuỗi có `#`.
+ */
+export function boChuThich(than) {
+  return than.split('\n').filter((d) => !/^\s*#/.test(d)).join('\n');
 }
 
 /** Máy gác có gọi lệnh cổng này không? `test` chấp nhận cả `npm test` lẫn `npm run test`. */
@@ -277,6 +290,12 @@ function tuKiem() {
     ['MÁY GÁC — `npm test` tính là gọi cổng `test`', () => mayGacCoGoi('        run: npm test\n', 'test'), true],
     ['MÁY GÁC — `npm run build` tính là gọi cổng `build`', () => mayGacCoGoi('run: npm run build\n', 'build'), true],
     ['MÁY GÁC — liệt kê tay từng thước KHÔNG tính là gọi cổng `build`', () => mayGacCoGoi('run: npm run test:html\nrun: npm run test:seo\n', 'build'), false],
+    ['MÁY GÁC — chữ `npm test` nằm trong CHÚ THÍCH thì KHÔNG tính (xanh giả 31/07)',
+      () => mayGacCoGoi(boChuThich('      # `npm test` = gác thước-chết + 3 thước\n      run: node --check x.js\n'), 'test'), false],
+    ['MÁY GÁC — bỏ chú thích rồi vẫn thấy bước chạy THẬT',
+      () => mayGacCoGoi(boChuThich('      # nói về npm test\n      - name: npm test\n        run: npm test\n'), 'test'), true],
+    ['BỎ CHÚ THÍCH — không chém nhầm `#` GIỮA dòng',
+      () => boChuThich('        run: echo "mau #fff"\n').includes('#fff'), true],
     ['ĐI TIẾP — moi được lệnh có dấu hai chấm', () => goiTiep('npm run test:e2e:hanh-vi && npm run kiem').join(','), 'test:e2e:hanh-vi,kiem'],
   ];
 
