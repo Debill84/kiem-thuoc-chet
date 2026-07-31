@@ -43,6 +43,24 @@ jobs:
       - name: npm test (tự kiểm bộ luật + tự soi mình)
         run: npm test
 
+      # 🩸 Chốt cho một lỗi CÂM đã trả giá lúc dựng (31/07): npm cài xong thì `.bin/kiem-thuoc-chet`
+      # là SYMLINK; gọi qua nó thì `process.argv[1]` là đường symlink còn `import.meta.url` là đường
+      # thật ⇒ chốt "có phải chạy thẳng không" lệch ⇒ cái gác IM LẶNG THOÁT 0. Trên máy gác nó
+      # trông y hệt "đã chạy và xanh". Chạy `node kiem.mjs` KHÔNG bao giờ lòi ra loại này ⇒ phải
+      # gọi qua ĐÚNG đường mà kho khác sẽ gọi.
+      - name: Chốt "gọi qua symlink .bin vẫn chạy THẬT" (chống lỗi câm)
+        run: |
+          npm i --no-save --prefix /tmp/thu "$(pwd)"
+          BIN=/tmp/thu/node_modules/.bin/kiem-thuoc-chet
+          "$BIN" --tu-kiem | tee /tmp/ra.txt
+          grep -q 'bộ luật tự kiểm đạt' /tmp/ra.txt \
+            || { echo "❌ gọi qua .bin KHÔNG in gì — lỗi câm đã quay lại"; exit 1; }
+          # và phải biết ĐỎ: soi một kho giả có thước chết thì rc phải là 1
+          mkdir -p /tmp/kho-hong
+          echo '{"name":"x","scripts":{"test":"echo ok","kiem-chet":"node k.mjs"}}' > /tmp/kho-hong/package.json
+          if "$BIN" --kho /tmp/kho-hong; then echo "❌ kho có thước chết mà vẫn XANH"; exit 1; fi
+          echo "✅ .bin chạy thật, và biết đỏ đúng chỗ"
+
   secret-scan:
     name: Quét secret rò (gitleaks — toàn kho)
     runs-on: ubuntu-latest
