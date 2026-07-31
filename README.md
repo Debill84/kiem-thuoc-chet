@@ -61,7 +61,7 @@ cổng vẫn không ai chạy. **Gác được ô (a) mà không gác cái cổn
 
 ```json
 "devDependencies": {
-  "@suga/kiem-thuoc-chet": "github:Debill84/kiem-thuoc-chet#v1.0.0"
+  "@suga/kiem-thuoc-chet": "github:Debill84/kiem-thuoc-chet#v1.0.1"
 }
 ```
 
@@ -102,7 +102,7 @@ cổng vẫn không ai chạy. **Gác được ô (a) mà không gác cái cổn
 - name: Lấy cái gác dùng chung (tarball tag, KHÔNG cần chìa)
   run: |
     GIT_SSH_COMMAND=/usr/bin/false npm i --no-save --prefix /tmp/gac \
-      "https://github.com/Debill84/kiem-thuoc-chet/archive/refs/tags/v1.0.0.tar.gz"
+      "https://github.com/Debill84/kiem-thuoc-chet/archive/refs/tags/v1.0.1.tar.gz"
     mkdir -p node_modules && cp -R /tmp/gac/node_modules/. node_modules/
 ```
 
@@ -119,8 +119,16 @@ npx kiem-thuoc-chet --tu-kiem    # tự kiểm BỘ LUẬT (16 ca, đối chứn
 ```
 
 `--tu-kiem` là phần **bắt buộc đọc**: *thước xanh sau khi vá không nói lên gì; thước đỏ khi đục
-mới nói.* Chính bộ tự kiểm này đã bắt được một lỗi thật lúc dựng — phép "miễn trừ không khai cớ"
-nằm sau chỗ thoát sớm nên không bao giờ chạy.
+mới nói.* Hai lỗi thật bị bắt ngay trong lúc dựng:
+
+1. Phép "miễn trừ không khai cớ" nằm **sau chỗ thoát sớm** ⇒ không bao giờ chạy. *(bộ tự kiểm bắt)*
+2. 🩸 Gọi qua **symlink `.bin`** thì cái gác **im lặng thoát 0** — `process.argv[1]` là đường
+   symlink còn `import.meta.url` là đường thật. Trên máy gác trông y hệt "đã chạy và xanh".
+   Chạy `node kiem.mjs` **không bao giờ** lòi ra loại này. *(bắt được vì đã gọi thử qua đúng đường
+   CI sẽ gọi — nay có chốt CI canh riêng.)*
+
+> 👉 Bài học chung: **đo cái thước bằng đúng đường mà người ta sẽ dùng nó**, đừng đo bằng đường
+> tiện tay nhất.
 
 ---
 
