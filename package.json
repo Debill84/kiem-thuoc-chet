@@ -1,0 +1,40 @@
+{
+  "name": "@suga/kiem-thuoc-chet",
+  "version": "1.0.0",
+  "description": "Cái gác dùng chung: thước nào trong kho cũng phải được CỔNG gọi, hoặc khai rõ thứ đang chặn — và miễn trừ phải TỰ HẾT HẠN",
+  "license": "UNLICENSED",
+  "type": "module",
+  "main": "kiem.mjs",
+  "exports": {
+    ".": "./kiem.mjs"
+  },
+  "bin": {
+    "kiem-thuoc-chet": "kiem.mjs"
+  },
+  "files": [
+    "kiem.mjs"
+  ],
+  "scripts": {
+    "test": "node kiem.mjs --tu-kiem && node kiem.mjs"
+  },
+  "kiemThuocChet": {
+    "goc": [
+      "test"
+    ],
+    "mienTru": {}
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "ci",
+    "guard",
+    "dead-test",
+    "npm-scripts",
+    "quality-gate"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Debill84/kiem-thuoc-chet.git"
+  }
+}

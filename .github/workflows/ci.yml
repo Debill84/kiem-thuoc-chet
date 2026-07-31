@@ -1,0 +1,59 @@
+name: CI
+# Kho này LÀ cái gác của nhà ⇒ nó phải tự chịu đúng luật nó áp cho người khác.
+# `npm test` = (1) tự kiểm BỘ LUẬT bằng đối chứng ÂM + DƯƠNG, (2) đem chính kho này ra soi.
+# Cố ý KHÔNG `npm ci`: gói này KHÔNG có phụ thuộc nào (đó là điều kiện để CI của các kho khác
+# kéo về được trong ~5 giây mà không cần chìa) — có `node` là chạy.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  luoi:
+    name: Tự kiểm bộ luật + tự soi mình
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22.x'
+
+      - name: Cú pháp
+        run: node --check kiem.mjs
+
+      # ⚠️ Gói này phải giữ ĐÚNG 0 phụ thuộc. Thêm một gói là mọi CI đang kéo bằng tarball
+      #    phải cài thêm cây phụ thuộc ⇒ chậm + có thể cần chìa ⇒ mất đúng lý do nó tồn tại.
+      - name: Chốt "0 phụ thuộc"
+        run: |
+          node -e '
+            const p = require("./package.json");
+            const n = Object.keys(p.dependencies ?? {}).length;
+            if (n) { console.error(`❌ gói này phải có 0 phụ thuộc, đang có ${n}`); process.exit(1); }
+            console.log("✅ 0 phụ thuộc — CI kho khác kéo về được không cần chìa");
+          '
+
+      - name: npm test (tự kiểm bộ luật + tự soi mình)
+        run: npm test
+
+  secret-scan:
+    name: Quét secret rò (gitleaks — toàn kho)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Quét secret rò (gitleaks — toàn kho, ĐỎ nếu có leak)
+        run: |
+          VER=8.24.3
+          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${VER}/gitleaks_${VER}_linux_x64.tar.gz" \
+            | tar -xz -C /tmp gitleaks
+          /tmp/gitleaks detect --source . --redact --no-banner --exit-code 1
