@@ -57,7 +57,8 @@
 //   npx kiem-thuoc-chet             # soi kho ở thư mục đang đứng
 //   npx kiem-thuoc-chet --tu-kiem   # tự kiểm BỘ LUẬT (đối chứng ÂM + DƯƠNG) — thước cũng phải bị đo
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync, realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { join, dirname, resolve, relative, sep } from 'node:path';
 
 const BO_QUA_THU_MUC = new Set(['node_modules', '.git', 'test-results', 'playwright-report', 'dist', 'build', '_raw']);
@@ -325,6 +326,14 @@ function chay(argv) {
   return 0;
 }
 
-// Chỉ chạy khi được gọi thẳng, không chạy khi bị `import` (tệp test dùng lại các hàm trên).
-const laChayThang = process.argv[1] && resolve(process.argv[1]) === resolve(new URL(import.meta.url).pathname);
+// Chỉ chạy khi được gọi thẳng, không chạy khi bị `import` (để kho khác dùng lại các hàm trên).
+//
+// 🩸 PHẢI `realpathSync` — đã trả giá ngay lúc dựng 31/07. npm cài gói xong thì `node_modules/.bin/
+//    kiem-thuoc-chet` là một **symlink** trỏ vào `../@suga/kiem-thuoc-chet/kiem.mjs`. Gọi qua nó thì
+//    `process.argv[1]` = đường SYMLINK, còn `import.meta.url` = đường THẬT ⇒ so trần là lệch ⇒ cái
+//    gác **im lặng không làm gì và thoát 0**. Trên máy gác nó trông y hệt "đã chạy và xanh" — đúng
+//    loại xanh-giả mà cả kho này sinh ra để chặn. Bắt được vì đã gọi thử qua ĐÚNG đường CI sẽ gọi,
+//    chứ chạy `node kiem.mjs` thì không bao giờ lòi ra.
+const duongThat = (d) => { try { return realpathSync(d); } catch { return resolve(d); } };
+const laChayThang = process.argv[1] && duongThat(process.argv[1]) === duongThat(fileURLToPath(import.meta.url));
 if (laChayThang) process.exit(chay(process.argv.slice(2)));
