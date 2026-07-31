@@ -165,13 +165,47 @@ export function coTepKhop(gocKho, mau) {
 }
 
 // ── Đọc mọi tệp workflow của máy gác ────────────────────────────────────────────────────────
+/**
+ * Đọc mọi tệp workflow. Trả `{ tho, lenh }` — hoặc `null` nếu KHÔNG có máy gác nào.
+ *  · `tho`  = toàn văn (đã bỏ chú thích) — dùng cho `buocCiChan`, vì bước CI có thể là `uses:`.
+ *  · `lenh` = CHỈ phần lệnh thật trong các khối `run:` — dùng cho luật ⑧.
+ */
 export function thanMayGac(gocKho) {
   const thuMuc = join(gocKho, '.github', 'workflows');
-  if (!existsSync(thuMuc)) return null;                    // null = KHÔNG có máy gác nào
+  if (!existsSync(thuMuc)) return null;
   let tep;
   try { tep = readdirSync(thuMuc).filter((t) => /\.ya?ml$/i.test(t)); } catch { return null; }
   if (!tep.length) return null;
-  return tep.map((t) => boChuThich(readFileSync(join(thuMuc, t), 'utf8'))).join('\n');
+  const tho = tep.map((t) => boChuThich(readFileSync(join(thuMuc, t), 'utf8'))).join('\n');
+  return { tho, lenh: lenhTrongMayGac(tho) };
+}
+
+/**
+ * Moi ra CHỈ phần lệnh thật trong các khối `run:` (kể cả khối nhiều dòng `run: |`).
+ *
+ * 🩸 Đục lỗ hai lần mới ra luật này (31/07). Bản đầu của ⑧ tìm chữ trong CẢ TỆP:
+ *    · lần 1 — chú thích `# \`npm test\` = …` làm nó xanh giả ⇒ vá bằng `boChuThich`;
+ *    · lần 2 — vẫn xanh giả, vì dòng **`- name: npm test`** cũng chứa đúng chữ đó.
+ *    Tức là gỡ hẳn bước chạy mà cái tên bước còn nằm đó thì không ai kêu. ⇒ Chỉ đọc `run:`.
+ *    Bài học: **thước tìm-chữ-trong-cả-tệp gần như luôn rộng hơn ý mình** — đục hai lần mới lộ.
+ */
+export function lenhTrongMayGac(than) {
+  const dong = than.split('\n');
+  const ra = [];
+  for (let i = 0; i < dong.length; i++) {
+    const m = dong[i].match(/^(\s*)(?:-\s+)?run:\s*(.*)$/);
+    if (!m) continue;
+    const mucThut = m[1].length;
+    const conLai = m[2].trim();
+    if (conLai && !/^[|>][-+\d]*$/.test(conLai)) { ra.push(conLai); continue; }
+    for (let j = i + 1; j < dong.length; j++) {           // khối nhiều dòng: nuốt phần thụt sâu hơn
+      const d = dong[j];
+      if (d.trim() && d.match(/^\s*/)[0].length <= mucThut) break;
+      ra.push(d.trim());
+      i = j;
+    }
+  }
+  return ra.join('\n');
 }
 
 /**
@@ -228,7 +262,7 @@ export function cham({ scripts, goc, mauThuoc, mienTru }, gocKho, { doTep = true
     than.push('⑧ KHÔNG CÓ MÁY GÁC: `.github/workflows/` trống — mọi thước chỉ chạy khi có người nhớ ra');
   } else {
     for (const g of goc) {
-      if (!mayGacCoGoi(gac, g)) {
+      if (!mayGacCoGoi(gac.lenh, g)) {
         than.push(`⑧ CỔNG NẰM NGOÀI MÁY GÁC: không workflow nào gọi \`npm run ${g}\` — thước mới thêm vào cổng vẫn không ai chạy`);
       }
     }
@@ -252,7 +286,9 @@ export function cham({ scripts, goc, mauThuoc, mienTru }, gocKho, { doTep = true
       than.push(`⑥ MIỄN TRỪ HẾT HIỆU LỰC: \`${t}\` khai kẹt vì thiếu \`${mt.tepChan}\` — nay tệp đó ĐÃ CÓ, kéo vào cổng đi`);
     }
     // ⑦ lý do "bước CI chặn" còn đúng không
-    if (mt?.buocCiChan && gac && gac.includes(mt.buocCiChan)) {
+    // `buocCiChan` soi TOÀN VĂN (không chỉ `run:`) vì bước CI có thể là `uses:`. Cố ý rộng hơn ⑧:
+    // rộng ⇒ miễn trừ hết hạn SỚM ⇒ ĐỎ ⇒ bắt người nhìn lại. Sai về phía đỏ thì an toàn.
+    if (mt?.buocCiChan && gac && gac.tho.includes(mt.buocCiChan)) {
       than.push(`⑦ MIỄN TRỪ HẾT HIỆU LỰC: \`${t}\` khai kẹt vì máy gác chưa có \`${mt.buocCiChan}\` — nay ĐÃ CÓ, kéo vào cổng đi`);
     }
   }
@@ -290,10 +326,16 @@ function tuKiem() {
     ['MÁY GÁC — `npm test` tính là gọi cổng `test`', () => mayGacCoGoi('        run: npm test\n', 'test'), true],
     ['MÁY GÁC — `npm run build` tính là gọi cổng `build`', () => mayGacCoGoi('run: npm run build\n', 'build'), true],
     ['MÁY GÁC — liệt kê tay từng thước KHÔNG tính là gọi cổng `build`', () => mayGacCoGoi('run: npm run test:html\nrun: npm run test:seo\n', 'build'), false],
-    ['MÁY GÁC — chữ `npm test` nằm trong CHÚ THÍCH thì KHÔNG tính (xanh giả 31/07)',
-      () => mayGacCoGoi(boChuThich('      # `npm test` = gác thước-chết + 3 thước\n      run: node --check x.js\n'), 'test'), false],
-    ['MÁY GÁC — bỏ chú thích rồi vẫn thấy bước chạy THẬT',
-      () => mayGacCoGoi(boChuThich('      # nói về npm test\n      - name: npm test\n        run: npm test\n'), 'test'), true],
+    ['MÁY GÁC — chữ `npm test` trong CHÚ THÍCH thì KHÔNG tính (xanh giả 31/07, lần 1)',
+      () => mayGacCoGoi(lenhTrongMayGac(boChuThich('      # `npm test` = gác thước-chết\n      run: node --check x.js\n')), 'test'), false],
+    ['MÁY GÁC — chữ `npm test` trong TÊN BƯỚC thì KHÔNG tính (xanh giả 31/07, lần 2)',
+      () => mayGacCoGoi(lenhTrongMayGac('      - name: npm test\n        run: node --check x.js\n'), 'test'), false],
+    ['MÁY GÁC — có bước chạy THẬT thì tính',
+      () => mayGacCoGoi(lenhTrongMayGac('      - name: npm test\n        run: npm test\n'), 'test'), true],
+    ['MÁY GÁC — khối `run: |` nhiều dòng cũng đọc được',
+      () => mayGacCoGoi(lenhTrongMayGac('      - name: x\n        run: |\n          npm ci\n          npm run build\n'), 'build'), true],
+    ['MÁY GÁC — khối `run: |` kết thúc đúng chỗ, không nuốt bước sau',
+      () => lenhTrongMayGac('      - name: x\n        run: |\n          npm ci\n      - name: y\n        uses: abc/def\n').includes('uses'), false],
     ['BỎ CHÚ THÍCH — không chém nhầm `#` GIỮA dòng',
       () => boChuThich('        run: echo "mau #fff"\n').includes('#fff'), true],
     ['ĐI TIẾP — moi được lệnh có dấu hai chấm', () => goiTiep('npm run test:e2e:hanh-vi && npm run kiem').join(','), 'test:e2e:hanh-vi,kiem'],

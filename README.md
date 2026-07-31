@@ -61,7 +61,7 @@ cổng vẫn không ai chạy. **Gác được ô (a) mà không gác cái cổn
 
 ```json
 "devDependencies": {
-  "@suga/kiem-thuoc-chet": "github:Debill84/kiem-thuoc-chet#v1.0.2"
+  "@suga/kiem-thuoc-chet": "github:Debill84/kiem-thuoc-chet#v1.0.3"
 }
 ```
 
@@ -102,7 +102,7 @@ cổng vẫn không ai chạy. **Gác được ô (a) mà không gác cái cổn
 - name: Lấy cái gác dùng chung (tarball tag, KHÔNG cần chìa)
   run: |
     GIT_SSH_COMMAND=/usr/bin/false npm i --no-save --prefix /tmp/gac \
-      "https://github.com/Debill84/kiem-thuoc-chet/archive/refs/tags/v1.0.2.tar.gz"
+      "https://github.com/Debill84/kiem-thuoc-chet/archive/refs/tags/v1.0.3.tar.gz"
     mkdir -p node_modules && cp -R /tmp/gac/node_modules/. node_modules/
 ```
 
@@ -115,7 +115,7 @@ cổng vẫn không ai chạy. **Gác được ô (a) mà không gác cái cổn
 ```bash
 npx kiem-thuoc-chet              # soi kho ở thư mục đang đứng
 npx kiem-thuoc-chet --kho ../x   # soi kho khác
-npx kiem-thuoc-chet --tu-kiem    # tự kiểm BỘ LUẬT (19 ca, đối chứng ÂM + DƯƠNG)
+npx kiem-thuoc-chet --tu-kiem    # tự kiểm BỘ LUẬT (22 ca, đối chứng ÂM + DƯƠNG)
 ```
 
 `--tu-kiem` là phần **bắt buộc đọc**: *thước xanh sau khi vá không nói lên gì; thước đỏ khi đục
@@ -126,9 +126,11 @@ mới nói.* **Ba** lỗi thật bị bắt ngay trong lúc dựng — cả ba �
    symlink còn `import.meta.url` là đường thật. Trên máy gác trông y hệt "đã chạy và xanh".
    Chạy `node kiem.mjs` **không bao giờ** lòi ra loại này. *(bắt được vì đã gọi thử qua đúng đường
    CI sẽ gọi — nay có chốt CI canh riêng.)*
-3. 🩸 Luật ⑧ đọc trúng chữ `npm test` nằm trong **dòng chú thích** của `ci.yml` ⇒ **gỡ hẳn bước
-   chạy thật khỏi máy gác mà vẫn xanh**. *(bắt được nhờ bảng đục lỗ ở `hidental-site` — mutation ④
-   không đỏ như mong; nếu tin đèn xanh thì đã ship.)*
+3. 🩸 Luật ⑧ **tìm chữ trong cả tệp** ⇒ **gỡ hẳn bước chạy thật khỏi máy gác mà vẫn xanh**.
+   Phải đục **hai lần** mới hết: lần 1 nó đọc trúng chữ trong **dòng chú thích**; vá xong vẫn xanh
+   vì lần 2 nó đọc trúng chữ trong **tên bước** (`- name: npm test`). Nay chỉ đọc phần lệnh trong
+   khối `run:`. *(bắt được nhờ bảng đục lỗ ở `hidental-site`; nếu tin đèn xanh thì đã ship.)*
+   👉 **Thước tìm-chữ-trong-cả-tệp gần như luôn rộng hơn ý mình.**
 
 > 👉 Bài học chung: **đo cái thước bằng đúng đường mà người ta sẽ dùng nó**, đừng đo bằng đường
 > tiện tay nhất — và **đục cho nó đỏ**, đèn xanh không chứng minh gì.
