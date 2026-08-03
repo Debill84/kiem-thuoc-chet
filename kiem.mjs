@@ -32,10 +32,20 @@
 //   ⑥ `tepChan`: tệp-chặn NAY ĐÃ CÓ              → ĐỎ (hết cớ, kéo vào cổng đi)
 //   ⑦ `buocCiChan`: bước CI đó NAY ĐÃ CÓ         → ĐỎ (hết cớ, kéo vào cổng đi)
 //   ⑧ CỔNG không được máy gác gọi                → ĐỎ (cổng nằm ngoài `.github/workflows/`)
+//   ⑨ TỆP thước không lệnh nào nhắc tới          → ĐỎ (tệp thước mồ côi)          ← khai `tepThuoc`
+//   ⑩ khai `tepThuoc` mà quét ra 0 tệp           → ĐỎ (mẫu sai / thư mục đã dời)
 //
 // ⑧ là bệnh TẦNG HAI, đo được 31/07 ở `santapocket-site`: mọi thước đều nằm trong `npm run build`
 //   (nên ①→⑦ đều xanh) nhưng `ci.yml` **liệt kê tay từng thước và không hề gọi `npm run build`**
 //   ⇒ thước mới thêm vào build vẫn không ai chạy. Gác được ô (a) mà không gác cái cổng thì vô ích.
+//
+// ⑨ là bệnh TẦNG BA, đo được 03/08 ở `suga-finance`: ①→⑧ gác **LỆNH npm**, nhưng kho đó nối
+//   **42 tệp thước** bằng `&&` BÊN TRONG một lệnh (`"test:logic": "node db/test/a.ts && node
+//   db/test/b.ts && …"`). Xoá một đoạn khỏi chuỗi đó thì tệp vẫn nằm trong kho, **không lệnh nào
+//   gọi, không ai kêu** — đúng con bệnh cả kho này sinh ra để chặn, chỉ tụt xuống một tầng đơn vị.
+//   Hôm khai luật này `suga-finance` đang 42/42 tệp đều được cắm, tức là **kỷ luật đang giữ, chưa
+//   phải cái gác đang giữ** — và kỷ luật thì không ai đo được.
+//   ⑩ đi kèm bắt buộc: quét ra 0 tệp thì ⑨ **xanh vì không đo được**, không phải vì sạch.
 //
 // ═══════════════════════════════════════════════════════════════════════════════════════════
 // KHAI BÁO — đặt trong `package.json` của kho được soi, khoá `kiemThuocChet`:
@@ -43,16 +53,22 @@
 //   "kiemThuocChet": {
 //     "goc": ["test"],                     // lệnh CỔNG (mặc định ["test"]); santapocket là ["build"]
 //     "mauThuoc": "^(kiem|test)",          // tuỳ chọn — cái gì tính là "thước"
+//     "tepThuoc": ["db/test/**/*_test.ts"],// tuỳ chọn — bật luật ⑨; KHÔNG khai thì ⑨/⑩ ngủ
 //     "mienTru": {
 //       "kiem-seo":              { "goiChan": "@debill84/cms", "vi": "cần chìa kho riêng" },
 //       "test:e2e:pixel":        { "tepChan": "e2e/**/*-linux.png", "vi": "chưa có ảnh chuẩn Linux" },
 //       "test:e2e:hanh-vi":      { "buocCiChan": "playwright install", "vi": "CI chưa cài trình duyệt" },
-//       "test:e2e:pixel:update": { "congCu": true, "vi": "không phải thước — lệnh cập ảnh chuẩn" }
+//       "test:e2e:pixel:update": { "congCu": true, "vi": "không phải thước — lệnh cập ảnh chuẩn" },
+//       "db/test/_khuon.ts":     { "congCu": true, "vi": "khuôn dùng chung, không phải thước" }
 //     }
 //   }
 //
 // ⚠️ `congCu` là ô DUY NHẤT không tự hết hạn (nó là lời khai của người, không phải phép đo).
 //    Nên nó vẫn phải chịu ② (lệnh còn tồn tại) và ③ (không được nằm trong cổng).
+//
+// 🔑 Khoá `mienTru` CÓ DẤU `/` được hiểu là ĐƯỜNG DẪN TỆP (miễn trừ cho ⑨); không có `/` thì là
+//    TÊN LỆNH npm. Tên lệnh npm không chứa `/` nên hai loại không đụng nhau. Cả hai đều chịu ②:
+//    lệnh phải còn trong `scripts`, tệp phải còn khớp `tepThuoc` — miễn trừ chết là ĐỎ.
 //
 //   npx kiem-thuoc-chet             # soi kho ở thư mục đang đứng
 //   npx kiem-thuoc-chet --tu-kiem   # tự kiểm BỘ LUẬT (đối chứng ÂM + DƯƠNG) — thước cũng phải bị đo
@@ -73,6 +89,9 @@ function docKho(goc) {
     scripts: pkg.scripts ?? {},
     goc: khai.goc?.length ? khai.goc : ['test'],
     mauThuoc: new RegExp(khai.mauThuoc ?? '^(kiem|test)'),
+    // Không khai `tepThuoc` ⇒ luật ⑨/⑩ NGỦ. Cố ý: 5 kho đang ghim gói này, nâng tag lên mà tự
+    // dưng đỏ thêm thì người ta gỡ cái gác chứ không đi vá — cổng mới phải TỰ CHỌN mà bước vào.
+    tepThuoc: khai.tepThuoc ?? [],
     mienTru: khai.mienTru ?? {},
   };
 }
@@ -147,21 +166,45 @@ export function mauSangRegex(mau) {
   return new RegExp(`^${than}$`);
 }
 
-/** Có tệp nào trong kho khớp mẫu không? (dừng ngay khi thấy cái đầu tiên) */
-export function coTepKhop(gocKho, mau) {
+/** MỌI tệp trong kho khớp mẫu, đường dẫn tương đối gốc kho, đã sắp xếp. */
+export function tepKhop(gocKho, mau) {
   const re = mauSangRegex(mau);
+  const ra = [];
   const di = (thuMuc) => {
     let muc;
-    try { muc = readdirSync(thuMuc, { withFileTypes: true }); } catch { return false; }
+    try { muc = readdirSync(thuMuc, { withFileTypes: true }); } catch { return; }
     for (const m of muc) {
+      const duong = join(thuMuc, m.name);
       if (m.isDirectory()) {
-        if (BO_QUA_THU_MUC.has(m.name)) continue;
-        if (di(join(thuMuc, m.name))) return true;
-      } else if (re.test(relative(gocKho, join(thuMuc, m.name)).split(sep).join('/'))) return true;
+        if (!BO_QUA_THU_MUC.has(m.name)) di(duong);
+      } else {
+        const tuongDoi = relative(gocKho, duong).split(sep).join('/');
+        if (re.test(tuongDoi)) ra.push(tuongDoi);
+      }
     }
-    return false;
   };
-  return di(gocKho);
+  di(gocKho);
+  return ra.sort();
+}
+
+/** Có tệp nào trong kho khớp mẫu không? */
+export function coTepKhop(gocKho, mau) {
+  return tepKhop(gocKho, mau).length > 0;
+}
+
+/**
+ * ⑨ Tệp thước MỒ CÔI: tệp có trong kho mà **không lệnh nào chạy tới cổng nhắc tên nó**.
+ *
+ * `thanChay` = thân MỌI lệnh cổng với tới được, GỘP thêm phần `run:` của máy gác — vì một tệp
+ * thước có thể được CI gọi thẳng (`run: node db/test/rls_test.ts`) chứ không qua lệnh npm nào.
+ * Bỏ sót nguồn thứ hai này là **kêu oan**, mà chuông kêu oan thì người ta tháo chuông.
+ *
+ * So bằng "có nhắc tên tệp" chứ không phân tích chuỗi `&&`: người ta nối thước bằng đủ kiểu
+ * (`&&`, `;`, `for`, `xargs`, biến shell). Đo thô nhưng đo đúng thứ cần biết — **tên tệp này có
+ * xuất hiện ở chỗ nào sẽ được chạy không**. Sai thì sai về phía CHO QUA, không kêu oan.
+ */
+export function tepMoCoi(danhSachTep, thanChay, mienTru = {}) {
+  return danhSachTep.filter((t) => !mienTru[t] && !String(thanChay).includes(t));
 }
 
 // ── Đọc mọi tệp workflow của máy gác ────────────────────────────────────────────────────────
@@ -229,7 +272,7 @@ export function mayGacCoGoi(than, tenGoc) {
 
 // ═══ CHẤM ═══════════════════════════════════════════════════════════════════════════════════
 /** Trả về danh sách lời than (rỗng = xanh). `doTep:false` để tự-kiểm bộ luật trên `scripts` giả. */
-export function cham({ scripts, goc, mauThuoc, mienTru }, gocKho, { doTep = true } = {}) {
+export function cham({ scripts, goc, mauThuoc, mienTru, tepThuoc = [] }, gocKho, { doTep = true } = {}) {
   const than = [];
   const laThuoc = (t) => mauThuoc.test(t);
   const thuoc = Object.keys(scripts).filter(laThuoc).filter((t) => !goc.includes(t));
@@ -245,8 +288,11 @@ export function cham({ scripts, goc, mauThuoc, mienTru }, gocKho, { doTep = true
     if (!trongCong && !mt) than.push(`① THƯỚC CHẾT: \`${t}\` không ai gọi, cũng không khai miễn trừ`);
     if (trongCong && mt) than.push(`③ MIỄN TRỪ THỪA: \`${t}\` đã chạy trong cổng rồi — gỡ khỏi bảng \`mienTru\``);
   }
+  // Khoá có `/` = miễn trừ cho TỆP (luật ⑨) — nó được chấm ở khối `doTep` bên dưới, vì muốn biết
+  // tệp còn tồn tại hay không thì phải đọc đĩa. Ở đây chỉ bỏ qua, đừng kêu oan là "lệnh đã mất".
+  const laKhoaTep = (t) => t.includes('/');
   for (const [t, mt] of Object.entries(mienTru)) {
-    if (!scripts[t]) than.push(`② MIỄN TRỪ CHẾT: bảng còn giữ \`${t}\` mà package.json không còn lệnh đó`);
+    if (!laKhoaTep(t) && !scripts[t]) than.push(`② MIỄN TRỪ CHẾT: bảng còn giữ \`${t}\` mà package.json không còn lệnh đó`);
     // Phép này thuần CẤU HÌNH (không đọc tệp) nên phải nằm TRƯỚC chỗ thoát sớm — bản đầu để nó
     // dưới khối `doTep` ⇒ ca tự-kiểm "miễn trừ không khai cớ" không bao giờ chạy tới. Chính bộ
     // tự kiểm bắt được, đúng bài "thước tự nó cũng là một thứ phải đem ra đo".
@@ -265,6 +311,32 @@ export function cham({ scripts, goc, mauThuoc, mienTru }, gocKho, { doTep = true
       if (!mayGacCoGoi(gac.lenh, g)) {
         than.push(`⑧ CỔNG NẰM NGOÀI MÁY GÁC: không workflow nào gọi \`npm run ${g}\` — thước mới thêm vào cổng vẫn không ai chạy`);
       }
+    }
+  }
+
+  // ⑨ + ⑩ TỆP thước mồ côi — chỉ chạy khi kho tự khai `tepThuoc`
+  if (tepThuoc.length) {
+    const coTep = [...new Set(tepThuoc.flatMap((m) => tepKhop(gocKho, m)))].sort();
+    // ⑩ chốt CHỐNG-MÙ. Quét ra 0 tệp thì ⑨ im lặng — mà im lặng ở đây nghĩa là "mẫu sai / thư mục
+    // đã dời", KHÔNG phải "không tệp nào mồ côi". Hai thứ đó nhìn từ ngoài giống hệt nhau.
+    if (!coTep.length) {
+      than.push(`⑩ KHAI \`tepThuoc\` MÀ QUÉT RA 0 TỆP: ${tepThuoc.map((m) => `\`${m}\``).join(', ')} — mẫu sai hoặc thư mục đã dời; luật ⑨ đang xanh vì KHÔNG ĐO ĐƯỢC`);
+    }
+    // Thân mọi lệnh cổng với tới được + phần `run:` của máy gác (tệp thước có thể được CI gọi thẳng).
+    const thanChay = [...daGoi].map((t) => scripts[t]).concat(gac ? [gac.lenh] : []).join('\n');
+    for (const t of tepMoCoi(coTep, thanChay, mienTru)) {
+      than.push(`⑨ TỆP THƯỚC MỒ CÔI: \`${t}\` có trong kho mà KHÔNG lệnh nào trên cổng nhắc tới — nó chưa từng chạy`);
+    }
+    // ② cho khoá-tệp: miễn trừ trỏ vào tệp không còn khớp `tepThuoc` nữa thì phải gỡ, kẻo lần sau
+    // có người đặt lại đúng tên đó, thước im lặng cho qua.
+    for (const t of Object.keys(mienTru)) {
+      if (laKhoaTep(t) && !coTep.includes(t)) {
+        than.push(`② MIỄN TRỪ CHẾT: bảng còn giữ tệp \`${t}\` mà không mẫu \`tepThuoc\` nào còn khớp tệp đó`);
+      }
+    }
+  } else {
+    for (const t of Object.keys(mienTru)) {
+      if (laKhoaTep(t)) than.push(`② MIỄN TRỪ CHẾT: khoá \`${t}\` là đường dẫn tệp (miễn trừ cho ⑨) mà kho KHÔNG khai \`tepThuoc\` — luật ⑨ đang tắt nên miễn trừ này vô nghĩa`);
     }
   }
 
@@ -316,6 +388,12 @@ function tuKiem() {
       R({ scripts: { test: 'echo ok', 'con-mat:soi': 'con-mat-soi' } }), false],
     ['DƯƠNG — miễn trừ không khai cớ nào',
       R({ scripts: { test: 'echo ok', 'kiem-a': 'node kiem.mjs' }, mienTru: { 'kiem-a': { vi: 'lười' } } }), true],
+    // ⑨ — khoá-tệp không được rơi vào ② "lệnh đã mất": nó KHÔNG phải lệnh, và muốn biết tệp
+    // còn không thì phải đọc đĩa (khối `doTep`). Kêu ở đây là kêu oan.
+    ['ÂM ⑨ — khoá miễn trừ là ĐƯỜNG DẪN TỆP thì không bị coi là "lệnh đã mất"',
+      R({ scripts: { test: 'echo ok' }, mienTru: { 'db/test/_khuon.ts': { congCu: true, vi: 'khuôn dùng chung' } } }), false],
+    ['DƯƠNG ⑨ — khoá-tệp cũng phải khai cớ, không được khai trống',
+      R({ scripts: { test: 'echo ok' }, mienTru: { 'db/test/_khuon.ts': { vi: 'lười' } } }), true],
   ];
 
   const caGlob = [
@@ -339,6 +417,29 @@ function tuKiem() {
     ['BỎ CHÚ THÍCH — không chém nhầm `#` GIỮA dòng',
       () => boChuThich('        run: echo "mau #fff"\n').includes('#fff'), true],
     ['ĐI TIẾP — moi được lệnh có dấu hai chấm', () => goiTiep('npm run test:e2e:hanh-vi && npm run kiem').join(','), 'test:e2e:hanh-vi,kiem'],
+
+    // ── ⑨ TỆP THƯỚC MỒ CÔI ────────────────────────────────────────────────────────────────
+    // Ca gốc: `suga-finance` nối 42 tệp bằng `&&` trong MỘT lệnh. Rút một đoạn ra là tệp đó
+    // nằm im mãi mãi. Đây đúng là hình dạng con bệnh, không phải ca bịa.
+    ['⑨ — tệp bị rút khỏi chuỗi `&&` thì thành mồ côi',
+      () => tepMoCoi(['db/test/a_test.ts', 'db/test/b_test.ts'], 'node db/test/a_test.ts').join(','), 'db/test/b_test.ts'],
+    ['⑨ ÂM — cả hai còn trong chuỗi thì không ai mồ côi',
+      () => tepMoCoi(['db/test/a_test.ts', 'db/test/b_test.ts'], 'node db/test/a_test.ts && node db/test/b_test.ts').length, 0],
+    ['⑨ ÂM — tệp chỉ được MÁY GÁC gọi thẳng (không qua lệnh npm) vẫn tính là có chạy',
+      () => tepMoCoi(['db/test/rls_test.ts'], 'npm run build\nnode db/test/rls_test.ts').length, 0],
+    ['⑨ ÂM — tệp đã khai miễn trừ thì bỏ qua',
+      () => tepMoCoi(['db/test/_khuon.ts'], 'echo ok', { 'db/test/_khuon.ts': { congCu: true } }).length, 0],
+    ['⑨ — miễn trừ tệp KHÁC không che được tệp đang mồ côi',
+      () => tepMoCoi(['db/test/a_test.ts'], 'echo ok', { 'db/test/z_test.ts': { congCu: true } }).join(','), 'db/test/a_test.ts'],
+    // Chốt chống "nhắc tên ở chỗ KHÔNG chạy". Đo thô (`includes`) nên phải biết rõ nó thô tới đâu:
+    // tên tệp nằm trong lệnh nào đó KHÔNG với tới cổng thì `thanChay` không chứa ⇒ vẫn mồ côi.
+    // Ca này khoá hành vi đó lại để lần sau ai "tối ưu" bằng cách gộp cả `scripts` vào là ĐỎ.
+    ['⑨ — tên tệp nằm ở lệnh NGOÀI cổng thì vẫn là mồ côi',
+      () => tepMoCoi(['db/test/a_test.ts'], 'npm run build').join(','), 'db/test/a_test.ts'],
+    ['QUÉT TỆP — `tepKhop` trả DANH SÁCH (⑩ đếm được), khác `coTepKhop` chỉ trả có/không',
+      () => Array.isArray(tepKhop(process.cwd(), '*.mjs')) && tepKhop(process.cwd(), '*.mjs').includes('kiem.mjs'), true],
+    ['QUÉT TỆP — mẫu không khớp gì thì ra mảng RỖNG (đây là ca ⑩ phải kêu)',
+      () => tepKhop(process.cwd(), 'khong-he-co/**/*.xyz').length, 0],
   ];
 
   let hong = 0;
@@ -372,7 +473,9 @@ function chay(argv) {
   const daGoi = vetTuGoc(khai.scripts, khai.goc);
   const chayDuoc = thuoc.filter((t) => daGoi.has(t));
 
-  console.log(`🔎 ${thuoc.length} thước — cổng \`${khai.goc.join('` + `')}\` bấm ${chayDuoc.length}, khai miễn trừ ${Object.keys(khai.mienTru).length}`);
+  const soTep = khai.tepThuoc.length ? [...new Set(khai.tepThuoc.flatMap((m) => tepKhop(gocKho, m)))].length : null;
+  console.log(`🔎 ${thuoc.length} thước — cổng \`${khai.goc.join('` + `')}\` bấm ${chayDuoc.length}, khai miễn trừ ${Object.keys(khai.mienTru).length}`
+    + (soTep === null ? '' : ` · ⑨ soi thêm ${soTep} TỆP thước`));
   for (const t of thuoc) {
     const mt = khai.mienTru[t];
     const co = mt?.goiChan ? `gói \`${mt.goiChan}\`` : mt?.tepChan ? `thiếu \`${mt.tepChan}\`` : mt?.buocCiChan ? `CI chưa có \`${mt.buocCiChan}\`` : mt?.congCu ? 'không phải thước' : '';
