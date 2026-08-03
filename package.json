@@ -1,6 +1,6 @@
 {
   "name": "@suga/kiem-thuoc-chet",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "Cái gác dùng chung: thước nào trong kho cũng phải được CỔNG gọi, hoặc khai rõ thứ đang chặn — và miễn trừ phải TỰ HẾT HẠN",
   "license": "UNLICENSED",
   "type": "module",
