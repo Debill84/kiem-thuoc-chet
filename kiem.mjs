@@ -73,7 +73,8 @@
 //   npx kiem-thuoc-chet             # soi kho ở thư mục đang đứng
 //   npx kiem-thuoc-chet --tu-kiem   # tự kiểm BỘ LUẬT (đối chứng ÂM + DƯƠNG) — thước cũng phải bị đo
 // ═══════════════════════════════════════════════════════════════════════════════════════════
-import { readFileSync, existsSync, readdirSync, statSync, realpathSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync, statSync, realpathSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { join, dirname, resolve, relative, sep } from 'node:path';
 
@@ -133,6 +134,8 @@ export function tepCuaLenh(lenh) {
  *
  * 🖥️ Có nhắc `server.js` trong thân thì coi như đi qua đó luôn — thước dựng máy chủ bằng
  *    `spawn(process.execPath, ['server.js'])`, gói bị chặn nằm ở NHÁNH ĐÓ chứ không nằm trong thước.
+ *
+ * 📦 Gom CẢ HAI: tên đầy đủ (`@debill84/cms/formhtml`) VÀ tên gói (`@debill84/cms`) — xem `tenGoi`.
  */
 export function goiNgoai(tepGoc, gocKho, sau = 6) {
   const thay = new Set();
@@ -147,12 +150,28 @@ export function goiNgoai(tepGoc, gocKho, sau = 6) {
       if (ten.startsWith('.')) {
         const ke = resolve(dirname(duong), ten);
         for (const d of ['', '.mjs', '.cjs', '.js']) di(ke + d, con - 1);
-      } else thay.add(ten);
+      } else { thay.add(ten); thay.add(tenGoi(ten)); }
     }
     if (/['"]server\.js['"]/.test(than)) di(join(gocKho, 'server.js'), con - 1);
   };
   di(tepGoc, sau);
   return thay;
+}
+
+/**
+ * `@debill84/cms/formhtml` → `@debill84/cms` · `sanitize-html/lib/x` → `sanitize-html`.
+ *
+ * 🩸 Vì sao có hàm này (04/08/2026): `hidental-site` khai miễn trừ `goiChan: "@debill84/cms"` cho
+ *    thước `kiem-o-khai-bao`, mà thước đó nạp gói qua **lối phụ** `require('@debill84/cms/formhtml')`.
+ *    Bản cũ nhét nguyên chuỗi vào rổ ⇒ `has('@debill84/cms')` sai ⇒ luật ⑤ hô *"miễn trừ hết hiệu
+ *    lực, kéo vào cổng đi"* trong khi gói vẫn chặn nguyên. Người tin cái gác sẽ đi kéo thước vào
+ *    cổng rồi CI đỏ vì `E401` — cái gác đẩy người ta vào đúng cái hố nó sinh ra để chắn.
+ *    Đây là **lần thứ hai** đúng hàm này kêu oan (lần đầu: `require_(` bắc cầu, xem ghi chú trên).
+ *    ⇒ Rổ giữ CẢ HAI tên: miễn trừ khai lối phụ (`@debill84/cms/formhtml`) vẫn khớp như cũ.
+ */
+export function tenGoi(ten) {
+  const doan = ten.split('/');
+  return ten.startsWith('@') ? doan.slice(0, 2).join('/') : doan[0];
 }
 
 // ── Tìm tệp theo mẫu glob (tự viết — gói này CỐ Ý không có phụ thuộc nào) ────────────────────
@@ -369,6 +388,16 @@ export function cham({ scripts, goc, mauThuoc, mienTru, tepThuoc = [] }, gocKho,
 
 // ═══ TỰ KIỂM BỘ LUẬT ════════════════════════════════════════════════════════════════════════
 // "Thước xanh sau khi vá không nói lên gì; thước đỏ khi đục mới nói."
+/** Viết một tệp thật ra thư mục tạm rồi đo trên đó — `goiNgoai` ĐỌC ĐĨA, không nhận chuỗi. */
+function voiTepTam(than, lam) {
+  const thuMuc = mkdtempSync(join(tmpdir(), 'ktc-'));
+  try {
+    const tep = join(thuMuc, 'thuoc.mjs');
+    writeFileSync(tep, than);
+    return lam(tep, thuMuc);
+  } finally { rmSync(thuMuc, { recursive: true, force: true }); }
+}
+
 function tuKiem() {
   const R = (m) => ({ scripts: {}, goc: ['test'], mauThuoc: /^(kiem|test)/, mienTru: {}, ...m });
   const ca = [
@@ -440,6 +469,21 @@ function tuKiem() {
       () => Array.isArray(tepKhop(process.cwd(), '*.mjs')) && tepKhop(process.cwd(), '*.mjs').includes('kiem.mjs'), true],
     ['QUÉT TỆP — mẫu không khớp gì thì ra mảng RỖNG (đây là ca ⑩ phải kêu)',
       () => tepKhop(process.cwd(), 'khong-he-co/**/*.xyz').length, 0],
+
+    // ── 📦 TÊN GÓI: nạp qua LỐI PHỤ vẫn phải khớp miễn trừ khai tên gói ──────────────────────
+    // Con bệnh thật 04/08/2026 ở `hidental-site`: thước gọi `require('@debill84/cms/formhtml')`,
+    // miễn trừ khai `goiChan: "@debill84/cms"` ⇒ luật ⑤ kêu oan. Lần thứ HAI hàm `goiNgoai` kêu oan.
+    ['TÊN GÓI — lối phụ của gói CÓ PHẠM VI rút về tên gói', () => tenGoi('@debill84/cms/formhtml'), '@debill84/cms'],
+    ['TÊN GÓI — gói có phạm vi mà không lối phụ thì giữ nguyên', () => tenGoi('@debill84/cms'), '@debill84/cms'],
+    ['TÊN GÓI — ⚠️ KHÔNG được cắt phạm vi thành `@debill84`', () => tenGoi('@debill84/cms/formhtml') === '@debill84', false],
+    ['TÊN GÓI — lối phụ của gói thường', () => tenGoi('sanitize-html/lib/x'), 'sanitize-html'],
+    ['TÊN GÓI — gói thường giữ nguyên', () => tenGoi('express'), 'express'],
+    ['ĐI BỘ — rổ có TÊN GÓI khi tệp chỉ nạp lối phụ (đúng con bệnh)',
+      () => voiTepTam('const {field} = require("@debill84/cms/formhtml");', (t, g) => goiNgoai(t, g).has('@debill84/cms')), true],
+    ['ĐI BỘ — rổ VẪN giữ tên đầy đủ (miễn trừ khai lối phụ không được gãy)',
+      () => voiTepTam('const {field} = require("@debill84/cms/formhtml");', (t, g) => goiNgoai(t, g).has('@debill84/cms/formhtml')), true],
+    ['ĐI BỘ ÂM — không nạp gói nào thì rổ KHÔNG tự mọc tên gói ra',
+      () => voiTepTam('import fs from "node:fs"; const x = 1;', (t, g) => goiNgoai(t, g).has('@debill84/cms')), false],
   ];
 
   let hong = 0;
