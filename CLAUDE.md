@@ -3,8 +3,9 @@
 Kho **CÔNG KHAI** chứa cái gác dùng chung `@suga/kiem-thuoc-chet`: *thước nào trong kho cũng phải
 được cổng gọi, hoặc khai rõ thứ đang chặn — và miễn trừ phải TỰ HẾT HẠN.*
 
-🧠 **Bộ nhớ:** nhóm `Memories/_Chung/` (mảnh `luat-tai-dung-co-san-ma-khong-no-29-07.md`,
-`bai-kiem-canh-dung-doan-chay.md`). Tủ gốc + luật làm việc đã nạp từ `~/Work/CLAUDE.md`.
+🧠 **Bộ nhớ:** kho này **CÔNG KHAI** ⇒ sổ tay **không được nêu tên tủ/ngăn/mảnh** — kể cả đường
+dẫn tương đối (luật 12/08/2026; 2 dòng cũ đã nêu, gỡ 12/08). Đường tra nằm ở sổ tay gốc của máy,
+mở phiên là tự nạp. **Đừng chép lại vào đây.**
 
 ## 3 luật của kho này (đừng phá)
 
